@@ -1,6 +1,6 @@
 import requests
 from datetime import datetime, timedelta, timezone
-from langchain_cohere import CohereEmbeddings
+from langchain_cohere import CohereEmbeddings, CohereRerank
 from pinecone import Pinecone, ServerlessSpec
 import os
 
@@ -140,3 +140,48 @@ class Embedder():
 
         index = self.pc.Index(index_name)
         index.upsert(vectors)
+
+class Retriever():
+    '''
+    class for retrieving diffs and pinecone data
+    '''
+    def __init__(self, embedding_model='embed-english-v3.0', reranker_model='rerank-english-v3.0'):
+        self.embeddings = CohereEmbeddings(model=embedding_model)
+        self.reranker = CohereRerank(model=reranker_model)
+        self.pc = Pinecone(api_key=os.getenv('PINECONE_API_KEY'))
+        self.github_token = os.getenv('GITHUB_TOKEN')
+
+    def semantic_search(self, issue_description: str, index_name: str, top_k: int = 5) -> list:
+        '''
+        performs a semantic search on the pinecone index for PRs that may have caused an issue and returns the top 3 most likely PRs
+        issue_description: str - the description of the issue
+        index_name: str - the name of the index to search on
+        top_k: int - the number of results to return
+        '''
+        query_embedding = self.embeddings.embed_query(issue_description)
+        results = self.pc.query(index_name=index_name, vector=query_embedding, top_k=top_k)
+
+        reranked_results = self.reranker.rerank(f'Which Pull Request is most likely to cause this issue: {issue_description}', results)
+        return reranked_results[:3]
+
+    def get_diffs(self, owner: str, repo: str, pr_ids: list) -> list:
+        '''
+        gets the diffs for the prs and returns a list of dicts containing the pr id and diff
+        owner: str - the owner of the repo
+        repo: str - the repo name
+        pr_ids: list - a list of pr ids
+        '''
+        if not pr_ids:
+            return []
+
+        diffs = []
+
+        for pr_id in pr_ids:
+            pr_url = f'https://api.github.com/repos/{owner}/{repo}/pulls/{pr_id}.diff'
+            headers = {
+                'Authorization': f'Bearer {self.github_token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            diff_response = requests.get(pr_url, headers=headers).json()
+            diffs.append(diff_response)
+        return diffs
