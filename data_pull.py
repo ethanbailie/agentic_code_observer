@@ -1,4 +1,4 @@
-from embed_pr import embedder
+from toolbox import embedder
 from dotenv import load_dotenv
 
 load_dotenv()

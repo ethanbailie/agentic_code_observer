@@ -1,11 +1,10 @@
 import requests
 from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
 from langchain_cohere import CohereEmbeddings
 from pinecone import Pinecone, ServerlessSpec
 import os
 
-class embedder():
+class Embedder():
     '''
     embeds pr data from github and upserts to pinecone
     '''
@@ -141,5 +140,3 @@ class embedder():
 
         index = self.pc.Index(index_name)
         index.upsert(vectors)
-
-
