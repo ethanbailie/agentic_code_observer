@@ -97,7 +97,7 @@ class Embedder():
             return []
 
         for pr in pr_data_list:
-            pr_id = str(pr['id'])
+            pr_id = pr['url'].split('/')[-1]
             text_to_embed = f"Title: {pr['title']}. Description: {pr['description']}. Merge Description: {pr['merge_description']}."
             metadata = {
                 'title': pr['title'],
@@ -159,10 +159,10 @@ class Retriever():
         top_k: int - the number of results to return
         '''
         query_embedding = self.embeddings.embed_query(issue_description)
-        results = self.pc.query(index_name=index_name, vector=query_embedding, top_k=top_k)
+        index = self.pc.Index(index_name)
+        results = index.query(vector=query_embedding, top_k=top_k)
 
-        reranked_results = self.reranker.rerank(f'Which Pull Request is most likely to cause this issue: {issue_description}', results)
-        return reranked_results[:3]
+        return results
 
     def get_diffs(self, owner: str, repo: str, pr_ids: list) -> list:
         '''
@@ -174,14 +174,14 @@ class Retriever():
         if not pr_ids:
             return []
 
-        diffs = []
+        diffs = {}
 
         for pr_id in pr_ids:
-            pr_url = f'https://api.github.com/repos/{owner}/{repo}/pulls/{pr_id}.diff'
+            pr_url = f'https://github.com/{owner}/{repo}/pull/{pr_id}.diff'
             headers = {
                 'Authorization': f'Bearer {self.github_token}',
                 'Accept': 'application/vnd.github.v3+json'
             }
-            diff_response = requests.get(pr_url, headers=headers).json()
-            diffs.append(diff_response)
+            diff_response = requests.get(pr_url, headers=headers).text
+            diffs[pr_id] = diff_response
         return diffs
