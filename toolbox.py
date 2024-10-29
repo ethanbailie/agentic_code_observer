@@ -1,11 +1,10 @@
 import requests
 from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
-from langchain_cohere import CohereEmbeddings
+from langchain_cohere import CohereEmbeddings, CohereRerank
 from pinecone import Pinecone, ServerlessSpec
 import os
 
-class embedder():
+class Embedder():
     '''
     embeds pr data from github and upserts to pinecone
     '''
@@ -98,7 +97,7 @@ class embedder():
             return []
 
         for pr in pr_data_list:
-            pr_id = str(pr['id'])
+            pr_id = pr['url'].split('/')[-1]
             text_to_embed = f"Title: {pr['title']}. Description: {pr['description']}. Merge Description: {pr['merge_description']}."
             metadata = {
                 'title': pr['title'],
@@ -142,4 +141,47 @@ class embedder():
         index = self.pc.Index(index_name)
         index.upsert(vectors)
 
+class Retriever():
+    '''
+    class for retrieving diffs and pinecone data
+    '''
+    def __init__(self, embedding_model='embed-english-v3.0', reranker_model='rerank-english-v3.0'):
+        self.embeddings = CohereEmbeddings(model=embedding_model)
+        self.reranker = CohereRerank(model=reranker_model)
+        self.pc = Pinecone(api_key=os.getenv('PINECONE_API_KEY'))
+        self.github_token = os.getenv('GITHUB_TOKEN')
 
+    def semantic_search(self, issue_description: str, index_name: str, top_k: int = 5) -> list:
+        '''
+        performs a semantic search on the pinecone index for PRs that may have caused an issue and returns the top 3 most likely PRs
+        issue_description: str - the description of the issue
+        index_name: str - the name of the index to search on
+        top_k: int - the number of results to return
+        '''
+        query_embedding = self.embeddings.embed_query(issue_description)
+        index = self.pc.Index(index_name)
+        results = index.query(vector=query_embedding, top_k=top_k)
+
+        return results
+
+    def get_diffs(self, owner: str, repo: str, pr_ids: list) -> list:
+        '''
+        gets the diffs for the prs and returns a list of dicts containing the pr id and diff
+        owner: str - the owner of the repo
+        repo: str - the repo name
+        pr_ids: list - a list of pr ids
+        '''
+        if not pr_ids:
+            return []
+
+        diffs = {}
+
+        for pr_id in pr_ids:
+            pr_url = f'https://github.com/{owner}/{repo}/pull/{pr_id}.diff'
+            headers = {
+                'Authorization': f'Bearer {self.github_token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+            diff_response = requests.get(pr_url, headers=headers).text
+            diffs[pr_id] = diff_response
+        return diffs
