@@ -160,7 +160,7 @@ class Retriever():
         '''
         query_embedding = self.embeddings.embed_query(issue_description)
         index = self.pc.Index(index_name)
-        results = index.query(vector=query_embedding, top_k=top_k)
+        results = index.query(vector=query_embedding, top_k=top_k, include_metadata=True)
 
         return results
 
