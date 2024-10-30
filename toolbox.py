@@ -71,7 +71,7 @@ class Embedder():
                     'title': pr['title'],
                     'state': pr['state'],
                     'description': pr['body'],
-                    'updated_at': pr['updated_at'],
+                    'updated_at': datetime.strptime(pr['updated_at'], '%Y-%m-%dT%H:%M:%SZ').timestamp(),
                     'url': pr['html_url']
                 }
 
@@ -158,9 +158,10 @@ class Retriever():
         index_name: str - the name of the index to search on
         top_k: int - the number of results to return
         '''
+        cutoff_time = (datetime.now(timezone.utc) - timedelta(hours=12)).timestamp()
         query_embedding = self.embeddings.embed_query(issue_description)
         index = self.pc.Index(index_name)
-        results = index.query(vector=query_embedding, top_k=top_k, include_metadata=True)
+        results = index.query(vector=query_embedding, top_k=top_k, include_metadata=True, filter={'updated_at': {'$gte': cutoff_time}})
 
         return results
 
