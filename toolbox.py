@@ -1,6 +1,6 @@
 import requests
 from datetime import datetime, timedelta, timezone
-from langchain_cohere import CohereEmbeddings, CohereRerank
+from langchain_cohere import CohereEmbeddings
 from pinecone import Pinecone, ServerlessSpec
 import os
 
@@ -147,7 +147,6 @@ class Retriever():
     '''
     def __init__(self, embedding_model='embed-english-v3.0', reranker_model='rerank-english-v3.0'):
         self.embeddings = CohereEmbeddings(model=embedding_model)
-        self.reranker = CohereRerank(model=reranker_model)
         self.pc = Pinecone(api_key=os.getenv('PINECONE_API_KEY'))
         self.github_token = os.getenv('GITHUB_TOKEN')
 
